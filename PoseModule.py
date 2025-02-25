@@ -44,7 +44,7 @@ class poseDetector():
         return lmList
 
 def main():
-    video_path = "PoseVids/Bench1.MOV"
+    video_path = "PoseVids/Bench2.MOV"
 
    
 
