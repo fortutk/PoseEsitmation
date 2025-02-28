@@ -2,6 +2,8 @@ import cv2
 import mediapipe as mp
 import time 
 import os 
+import csv
+import argparse
 
 class poseDetector():
     
@@ -31,22 +33,23 @@ class poseDetector():
         return img
         
     
-    def findPosition(self, img, draw=True): # pose_world_landmarks is real 3D cords, this is only pixel vals 
+    def findPosition(self, img, draw=True):
         lmList = []
-        if self.results.pose_landmarks:
-            for id, lm in enumerate(self.results.pose_landmarks.landmark):
+        if self.results.pose_landmarks and self.results.pose_world_landmarks:
+            for id, (lm, world_lm) in enumerate(zip(self.results.pose_landmarks.landmark, self.results.pose_world_landmarks.landmark)):
                 h, w, c = img.shape
-                # print(id, lm) 
-                cx, cy = int(lm.x*w), int(lm.y*h)# landmarks are in ratio of image size, multiply by width and height to get pixel values
-                lmList.append([id, cx, cy])
+                cx, cy = int(lm.x*w), int(lm.y*h)
+                lmList.append([id, cx, cy, lm.x, lm.y, lm.z, world_lm.x, world_lm.y, world_lm.z])
                 if draw:
-                    cv2.circle(img, (cx,cy), 5, (255,0,0), cv2.FILLED)
+                    cv2.circle(img, (cx, cy), 5, (255,0,0), cv2.FILLED)
         return lmList
 
 def main():
-    video_path = "PoseVids/Bench2.MOV"
-
-   
+    parser = argparse.ArgumentParser(description="Pose estimation with MediaPipe and CSV logging.")
+    parser.add_argument("video_path", type=str, help="Path to the input video file.")
+    args = parser.parse_args()
+    
+    video_path = args.video_path
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -54,6 +57,15 @@ def main():
         return
     pTime = 0
     detector = poseDetector()
+
+    base_filename = os.path.basename(video_path)
+    filename_without_ext = os.path.splitext(base_filename)[0]
+    csv_file = f"pose_data_{filename_without_ext}.csv"
+    file = open(csv_file, mode='w', newline='')
+    writer = csv.writer(file)
+    writer.writerow(["Time", "ID", "Pixel_X", "Pixel_Y", "Norm_X", "Norm_Y", "Norm_Z", "World_X", "World_Y", "World_Z"])
+    
+    start_time = time.time()
     while True:
         success, img = cap.read()
         if not success:
@@ -68,6 +80,10 @@ def main():
         pTime = cTime
         cv2.putText(img, str(int(fps)), (70,50), cv2.FONT_HERSHEY_PLAIN, 3, (255,0,255), 3)
         cv2.imshow("Image", img)
+        timestamp = time.time() - start_time
+        for lm in lmList:
+            writer.writerow([timestamp] + lm)
+        file.flush() 
         cv2.waitKey(1)
 
 
