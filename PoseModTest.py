@@ -3,9 +3,7 @@ import cv2
 import time
 import PoseModule as pm
 
-video_path = "PoseVids/Bench2.MOV"
-
-   
+video_path = "PoseVids/Bench2.MOV" 
 
 cap = cv2.VideoCapture(video_path)
 

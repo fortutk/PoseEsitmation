@@ -4,6 +4,7 @@ import time
 import os 
 import csv
 import argparse
+from CSVComb import CSV_Combiner
 
 class poseDetector():
     
@@ -43,24 +44,19 @@ class poseDetector():
                 if draw:
                     cv2.circle(img, (cx, cy), 5, (255,0,0), cv2.FILLED)
         return lmList
-
-def main():
-    parser = argparse.ArgumentParser(description="Pose estimation with MediaPipe and CSV logging.")
-    parser.add_argument("video_path", type=str, help="Path to the input video file.")
-    args = parser.parse_args()
     
-    video_path = args.video_path
-
+def make_csv(video_path: str, exercise: str):
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print(f"Error: Couldn't read video stream from file '{video_path}'")
         return
     pTime = 0
     detector = poseDetector()
-
+    
     base_filename = os.path.basename(video_path)
     filename_without_ext = os.path.splitext(base_filename)[0]
-    csv_file = f"pose_data_{filename_without_ext}.csv"
+    os.makedirs(f"{exercise}_PoseCSVs", exist_ok=True)
+    csv_file = f"{exercise}_PoseCSVs/pose_data_{filename_without_ext.lower()}.csv"
     file = open(csv_file, mode='w', newline='')
     writer = csv.writer(file)
     writer.writerow(["Time", "ID", "Pixel_X", "Pixel_Y", "Norm_X", "Norm_Y", "Norm_Z", "World_X", "World_Y", "World_Z"])
@@ -86,6 +82,24 @@ def main():
         file.flush() 
         cv2.waitKey(1)
 
+def main():
+    parser = argparse.ArgumentParser(description="Pose estimation with MediaPipe and CSV logging.")
+    parser.add_argument("video_path", type=str, help="Path to the input video folder.")
+    parser.add_argument("exercise", type=str, help="Exercise name (squat, bench, deadlift).")
+    args = parser.parse_args()
+    
+    video_path = args.video_path
+    exercise = args.exercise.lower()
+
+    for filename in os.listdir(video_path):
+        if os.path.isfile(os.path.join(video_path, filename)):
+            if exercise.lower() in filename.lower():
+                make_csv(os.path.join(video_path, filename), exercise)
+                print(f"{filename}'s Pose CSV saved.")
+    print("All Pose CSVs saved.\n Combining CSVs...")
+    
+    CSV_Combiner(f"{exercise}_PoseCSVs", f"{exercise}_PoseDataFull.csv")
+    print("Pose CSVs combined and split into train and test sets.")
 
 if __name__ == "__main__":
     main()
