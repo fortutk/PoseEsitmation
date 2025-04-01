@@ -13,7 +13,7 @@ CONFIG = {
     'lr': 0.001,
     'batch_size': 32,
     'epochs': 50,
-    'phase_pc_index': 0,
+    'num_pca_components': 3,  # Use first 3 PCA components instead of just 1
     'phase_threshold': 0.1
 }
 
@@ -39,14 +39,19 @@ class PhaseLSTM(nn.Module):
         return self.classifier(out[:, -1]).squeeze()
 
 # ====================== Data Preparation ======================
-def create_phase_labels(sequences, pc_index=0):
+def create_phase_labels(sequences):
     labels = []
     for seq in sequences:
         if len(seq) < 2:
             continue
-        vertical = seq[:, pc_index]
-        grad = np.gradient(vertical)
-        phase = int(np.mean(grad > CONFIG['phase_threshold']) > 0.5)
+        # Use multiple PCA components to determine phase
+        dominant_motion = seq[:, :CONFIG['num_pca_components']]  # Take first N components
+        # Compute gradient magnitude across components
+        grads = np.array([np.gradient(comp) for comp in dominant_motion.T])
+        grad_magnitude = np.linalg.norm(grads, axis=0)  # Euclidean norm of gradients
+        # Determine direction using first component (assuming it's still the most important)
+        direction = np.sign(grads[0])  # Sign of the first component's gradient
+        phase = int(np.mean(grad_magnitude * direction > CONFIG['phase_threshold']) > 0.5)
         labels.append(phase)
     return torch.tensor(labels, dtype=torch.float32)
 
@@ -59,11 +64,11 @@ def prepare_loaders():
     val_feat_dim = val_set.data[0].shape[1]
     print(f"Training features: {train_feat_dim}, Validation features: {val_feat_dim}")
 
-    # Use minimum dimension or handle separately
-    feat_dim = min(train_feat_dim, val_feat_dim)
+    # Ensure we have enough components
+    feat_dim = min(train_feat_dim, val_feat_dim, CONFIG['num_pca_components'])
     CONFIG['input_size'] = feat_dim  # Update config
 
-    # Trim features if necessary
+    # Trim features to use first N PCA components
     train_seqs = [torch.tensor(seq[:, :feat_dim], dtype=torch.float32) 
                  for seq in train_set.data if len(seq) >= 2]
     val_seqs = [torch.tensor(seq[:, :feat_dim], dtype=torch.float32)
@@ -130,7 +135,7 @@ def evaluate(model, loader, device):
 # ====================== Main ======================
 if __name__ == "__main__":
     train_loader, val_loader = prepare_loaders()
-    print(f"Using {CONFIG['input_size']} features")
+    print(f"Using {CONFIG['input_size']} PCA components")
     
     sample_seq, _ = next(iter(train_loader))
     print(f"Sample seq shape: {sample_seq.shape}")
