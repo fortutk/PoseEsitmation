@@ -7,7 +7,6 @@ import argparse
 from CSVComb import CSV_Combiner
 
 class poseDetector():
-    
     def __init__(self, mode=False, upBody=False, smooth=True, detectionCon=True, trackCon=0.5):
         self.mode = mode
         self.upBody = upBody
