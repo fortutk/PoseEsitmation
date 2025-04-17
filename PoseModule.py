@@ -160,7 +160,7 @@ def main():
     print(f"All videos processed in {time.time() - start_time:.2f} seconds")
     print("Combining CSVs...")
     
-    CSV_Combiner("Squat_PoseCSVs", "Squat_PoseDataFull.csv")
+    CSV_Combiner("Squat_PoseCSVs/Ryans", "Squat_PoseDataRyan.csv")
     print("Pose CSVs combined and split into train and test sets.")
 
 if __name__ == "__main__":
