@@ -3,6 +3,7 @@ import mediapipe as mp
 import time
 import os
 import csv
+import math
 import argparse
 import numpy as np
 from CSVComb import CSV_Combiner
@@ -30,14 +31,7 @@ class PoseDetector():
             min_tracking_confidence=self.trackCon
         )
     
-    def findPose(self, img, rotate_angle=0):
-        if rotate_angle == 90:
-            img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
-        elif rotate_angle == 180:
-            img = cv2.rotate(img, cv2.ROTATE_180)
-        elif rotate_angle == 270:
-            img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
-
+    def findPose(self, img):
         imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.results = self.pose.process(imgRGB)
 
@@ -76,6 +70,13 @@ def process_video(video_path: str, rotate_angle=0):
         print(f"Error: Couldn't read video stream from file '{video_path}'")
         return None
     
+    original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    # ↓ Add these lines here to reduce resolution
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, int(original_width * 0.5))
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, int(original_height * 0.5))
+    
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS)
     if fps <= 0:
@@ -102,6 +103,10 @@ def process_video(video_path: str, rotate_angle=0):
             success, img = cap.read()
             if not success:
                 break
+
+            # Rotate the entire frame BEFORE any further processing
+            if rotate_angle != 0:
+                img = rotate_image(img, rotate_angle)
             
             blob = cv2.dnn.blobFromImage(img, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
             yolo_net.setInput(blob)
@@ -155,9 +160,10 @@ def process_video(video_path: str, rotate_angle=0):
                     print(f"Empty cropped image at frame {frame_num}, skipping frame.")
                     continue
                 
-                cropped_img = detector.findPose(cropped_img, rotate_angle=rotate_angle)
-                lmList = detector.findPosition(cropped_img)
-                
+                cropped_with_pose = detector.findPose(cropped_img.copy())
+                lmList = detector.findPosition(cropped_img)  # Still use the original for positions
+                img[y:y+h, x:x+w] = cropped_with_pose
+
                 # Map the landmarks to the original frame coordinates
                 full_frame_lmList = []
                 for lm in lmList:
@@ -183,10 +189,10 @@ def process_video(video_path: str, rotate_angle=0):
             if frame_num % 100 == 0:
                 print(f"Processing {video_path}: {frame_num}/{frame_count} frames")
 
-            resized = cv2.resize(img, (640, 360))
-            cv2.imshow("Processed Video", resized)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+            # resized = cv2.resize(img, (math.floor(img.shape[1] * 0.5), math.floor(img.shape[0] * 0.5)))
+            # cv2.imshow("Processed Video", resized)
+            # if cv2.waitKey(1) & 0xFF == ord('q'):
+            #     break
         
         # Write any remaining data in the buffer at the end
         if csv_buffer:
@@ -196,16 +202,25 @@ def process_video(video_path: str, rotate_angle=0):
     cv2.destroyAllWindows()
     return csv_file
 
+def rotate_image(img, angle):
+    if angle == 90:
+        return cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+    elif angle == 180:
+        return cv2.rotate(img, cv2.ROTATE_180)
+    elif angle == 270:
+        return cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    return img
 
-def determine_rotation_angle(reference_video_path):
-    cap = cv2.VideoCapture(reference_video_path)
-    if not cap.isOpened():
-        return 0
-    success, img = cap.read()
-    if not success:
-        return 0
-    h, w = img.shape[:2]
-    return 90 if h > w * 1.5 else 0
+
+# def determine_rotation_angle(reference_video_path):
+#     cap = cv2.VideoCapture(reference_video_path)
+#     if not cap.isOpened():
+#         return 0
+#     success, img = cap.read()
+#     if not success:
+#         return 0
+#     h, w = img.shape[:2]
+#     return 90 if h > w * 1.5 else 0
 
 def main():
     parser = argparse.ArgumentParser(description="Pose estimation with MediaPipe and CSV logging.")
@@ -220,7 +235,7 @@ def main():
     if rotation_angle is None and os.path.isdir(video_path):
         for filename in os.listdir(video_path):
             if filename.lower().endswith(('.mp4', '.avi', '.mov')):
-                rotation_angle = determine_rotation_angle(os.path.join(video_path, filename))
+                rotation_angle = 0 #determine_rotation_angle(os.path.join(video_path, filename))
                 break
 
     start_time = time.time()
