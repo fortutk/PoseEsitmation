@@ -16,10 +16,10 @@ CONFIG = {
     'lr': 0.01,       # Higher initial learning rate
     'batch_size': 32,
     'epochs': 50,
-    'min_velocity': 0.02,
+    'threshold_pct': 50,  # Percentile for UP/DOWN threshold
     'sigma': 2.5,
     'early_stopping_patience': 5,
-    'class_weights': torch.tensor([1.0, 1.0, 1.0])  # Add class weights (e.g., for UP, DOWN, STABLE)
+    'class_weights': torch.tensor([1.0, 1.0])  # Add class weights (e.g., for UP, DOWN, STABLE)
 }
 
 # ====================== Weighted Focal Loss ======================
@@ -54,7 +54,7 @@ class PhaseLSTM(nn.Module):
             batch_first=True
         )
         self.classifier = nn.Sequential(
-            nn.Linear(CONFIG['hidden_size'], 3)  # Output 3 classes (for UP, DOWN, STABLE)
+            nn.Linear(CONFIG['hidden_size'], 2)  # Output 3 classes (for UP, DOWN, STABLE)
         )
         
         # Initialize weights properly
@@ -81,17 +81,13 @@ def check_feature_distributions(dataset):
             features_up.append(seq.numpy())
         elif label == 1:  # DOWN
             features_down.append(seq.numpy())
-        else:  # STABLE
-            features_stable.append(seq.numpy())
     
     features_up = np.concatenate(features_up)
     features_down = np.concatenate(features_down)
-    features_stable = np.concatenate(features_stable)
     
     print("\n=== Feature Statistics ===")
     print(f"UP samples: {len(features_up)}")
     print(f"DOWN samples: {len(features_down)}")
-    print(f"STABLE samples: {len(features_stable)}")
     
     plt.figure(figsize=(15, 8))
     num_features = min(5, features_up.shape[1])  # Ensure we only use available features
@@ -99,7 +95,6 @@ def check_feature_distributions(dataset):
         plt.subplot(2, 3, i+1)
         plt.hist(features_up[:, i].ravel(), bins=50, alpha=0.5, label='UP')
         plt.hist(features_down[:, i].ravel(), bins=50, alpha=0.5, label='DOWN')
-        plt.hist(features_stable[:, i].ravel(), bins=50, alpha=0.5, label='STABLE')
         plt.title(f'Feature {i} Distribution')
         plt.legend()
     plt.tight_layout()
@@ -109,12 +104,12 @@ def check_feature_distributions(dataset):
 def prepare_loaders():
     train_set = SquatPhaseDataset("Squat_Train.csv", 
                                 seq_length=30,
-                                min_velocity=CONFIG['min_velocity'],
+                                threshold_pct=CONFIG['threshold_pct'],
                                 sigma=CONFIG['sigma'])
     
     val_set = SquatPhaseDataset("Squat_Test.csv",
                               seq_length=30,
-                              min_velocity=CONFIG['min_velocity'],
+                              threshold_pct=CONFIG['threshold_pct'],
                               sigma=CONFIG['sigma'])
 
     # Run diagnostics

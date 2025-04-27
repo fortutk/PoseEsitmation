@@ -247,9 +247,6 @@ class SquatClassifier:
                 elif prob_up < CONFIG['phase_threshold_down']:
                     phase = "DOWN"
                     prob = prob_up
-                else:
-                    phase = "STABLE"
-                    prob = 1 - abs(prob_up - 0.5)  # Higher probability for being stable
                 
                 self.prediction_history.append((phase, prob))
                 
@@ -310,8 +307,6 @@ def process_video(video_path, model_path):
                 color = (0, 255, 0)
             elif phase == "DOWN":
                 color = (0, 0, 255)
-            else:
-                color = (255, 255, 0)  # Stable (Yellow)
             
             cv2.putText(processed_frame, f"{phase} ({confidence:.2f})", 
                        (50, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.2, color, 3)
